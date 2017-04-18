@@ -22,4 +22,8 @@
  */
 @property (nonatomic, copy) NSString *subtitle;
 
+@property (nonatomic, copy) NSString *est;
+@property (nonatomic, copy) NSString *growth;
+@property (nonatomic, copy) NSString *profit;
+
 @end

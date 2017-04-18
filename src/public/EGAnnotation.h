@@ -19,6 +19,8 @@
 
 @optional
 
+-(BOOL)calloutTapped;
+
 /*!
  @property title
  @brief String representing the annotation title.
@@ -29,6 +31,8 @@
  @property subtitle
  @brief String representing the annotation subtitle.
  */
-@property (nonatomic, readonly, copy) NSString *subtitle;
+@property (nonatomic, readonly, copy) NSString *est;
+@property (nonatomic, readonly, copy) NSString *growth;
+@property (nonatomic, readonly, copy) NSString *profit;
 
 @end

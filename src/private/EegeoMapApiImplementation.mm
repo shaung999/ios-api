@@ -20,8 +20,18 @@
 #include "GlobeCameraControllerConfiguration.h"
 #include "CityThemesModule.h"
 
+#include "RouteBuilder.h"
+#include "VectorMath.h"
+#include "RouteStyle.h"
+#include "RouteService.h"
+#include "Route.h"
+#include "IdentityRouteThicknessPolicy.h"
+#include "MathsHelpers.h"
+#include "AggregateCollisionBvhProvider.h"
+
 @implementation EegeoMapApiImplementation
 {
+    Eegeo::Routes::Style::Thickness::IdentityRouteThicknessPolicy m_routeThicknessPolicy;
     Eegeo::EegeoWorld* m_pWorld;
     ExampleApp* m_pApp;
     id<EGMapDelegate> m_delegate;
@@ -29,6 +39,9 @@
     Eegeo::Api::CameraTransitioner* m_pCameraTransitioner;
     Eegeo::Api::PrecacheOperationScheduler m_precacheOperationScheduler;
     Eegeo::Api::AnnotationController* m_pAnnotationController;
+    
+    Eegeo::Selection::Building* m_pBuildingSelection;
+    Eegeo::Collision::RayCasterResult m_rayCasterResult;
 }
 
 @synthesize selectedAnnotations = _selectedAnnotations;
@@ -41,17 +54,22 @@
     m_pWorld = &world;
     m_pApp = &app;
     m_delegate = delegate;
-    
+
     m_pCameraTransitioner = Eegeo_NEW(Eegeo::Api::CameraTransitioner)(m_pApp->GetGlobeCameraController());
+    
+    Eegeo::Modules::Map::MapModule& mapModule = m_pWorld->GetMapModule();
+
+    //    Eegeo::Collision::AggregateCollisionBvhProvider& acbp = mapModule.GetAggregateCollisionBvhProvider();
+    Eegeo::Collision::EnvironmentRayCaster* pRayCaster = new Eegeo::Collision::EnvironmentRayCaster( mapModule.GetAggregateCollisionBvhProvider(), mapModule.GetEnvironmentFlatteningService() );
+    
+    m_pBuildingSelection = Eegeo_NEW(Eegeo::Selection::Building)( pRayCaster );
     
     Eegeo::Modules::IPlatformAbstractionModule& platformAbstractionModule = m_pWorld->GetPlatformAbstractionModule();
     Eegeo::Modules::Core::RenderingModule& renderingModule = m_pWorld->GetRenderingModule();
     Eegeo::Modules::Map::Layers::TerrainModelModule& terrainModelModule = m_pWorld->GetTerrainModelModule();
-    Eegeo::Modules::Map::MapModule& mapModule = m_pWorld->GetMapModule();
     const Eegeo::Rendering::ScreenProperties& initialScreenProperties = m_pApp->GetScreenPropertiesProvider().GetScreenProperties();
     Eegeo::Helpers::ITextureFileLoader& textureFileLoader = platformAbstractionModule.GetTextureFileLoader();
     Eegeo::Resources::Terrain::Heights::TerrainHeightProvider& terrainHeightProvider = m_pWorld->GetMapModule().GetTerrainModelModule().GetTerrainHeightProvider();
-    
     
     m_pAnnotationController = Eegeo_NEW(Eegeo::Api::AnnotationController)(renderingModule,
                                                                           platformAbstractionModule,
@@ -70,19 +88,47 @@
 {
     Eegeo_DELETE(m_pCameraTransitioner);
     Eegeo_DELETE(m_pAnnotationController);
+    Eegeo_DELETE(m_pBuildingSelection);
 }
 
 - (void)update:(float)dt
 {
+    static double previousAlt = 0.0f;
+    
     if(m_pCameraTransitioner->IsTransitioning())
     {
         m_pCameraTransitioner->Update(dt);
     }
     
     Eegeo::Camera::RenderCamera renderCamera(m_pApp->GetGlobeCameraController().GetRenderCamera());
+
+    currentAltitude = renderCamera.GetAltitude();
+    if ( previousAlt != currentAltitude )
+    {
+        if ( [m_delegate respondsToSelector:@selector(altitudeChangedTo:distanceToInterest:)] )
+        {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                
+                [m_delegate altitudeChangedTo:currentAltitude distanceToInterest:m_pApp->GetGlobeCameraController().GetDistanceToInterest()];
+            });
+        }
+        previousAlt = currentAltitude;
+    }
     
     m_precacheOperationScheduler.Update();
     m_pAnnotationController->Update(dt, renderCamera);
+    m_pApp->GetBuildingFootprintsModule().Update( dt );
+}
+
+- (CGFloat)getCurrentAltitude
+{
+    Eegeo::Camera::RenderCamera renderCamera(m_pApp->GetGlobeCameraController().GetRenderCamera());
+    return renderCamera.GetAltitude();
+}
+
+- (CGFloat)getCurrentDistanceToInterest
+{
+    return m_pApp->GetGlobeCameraController().GetDistanceToInterest();
 }
 
 - (void)updateScreenProperties:(const Eegeo::Rendering::ScreenProperties&)screenProperties
@@ -139,7 +185,6 @@
     }
 }
 
-
 - (void)setCenterCoordinate:(CLLocationCoordinate2D)centerCoordinate
              distanceMetres:(float)distanceMetres
          orientationDegrees:(float)orientationDegrees
@@ -147,7 +192,7 @@
 {
     Eegeo::Space::LatLongAltitude location = Eegeo::Space::LatLongAltitude::FromDegrees(centerCoordinate.latitude,
                                                                                         centerCoordinate.longitude,
-                                                                                        0.f);
+                                                                                        distanceMetres);
     
     if(!animated)
     {
@@ -155,12 +200,14 @@
         Eegeo::Camera::CameraHelpers::EcefTangentBasisFromPointAndHeading(location.ToECEF(),
                                                                           orientationDegrees,
                                                                           cameraInterestBasis);
-        
         m_pApp->SetCameraView(cameraInterestBasis, distanceMetres);
     }
     else
     {
-        m_pCameraTransitioner->StartTransitionTo(location.ToECEF(), distanceMetres, orientationDegrees, true);
+        if ( orientationDegrees >= 0.0f )
+            m_pCameraTransitioner->StartTransitionTo(location.ToECEF(), distanceMetres, orientationDegrees, true);
+        else
+            m_pCameraTransitioner->StartTransitionTo(location.ToECEF(), distanceMetres, true);
     }
 }
 
@@ -205,6 +252,12 @@
 - (EGAnnotationView*)viewForAnnotation:(id<EGAnnotation>)annotation
 {
     return m_pAnnotationController->ViewForAnnotation(annotation);
+}
+
+- (void)zoomToAltitude:(float)altitude
+{
+    Eegeo::dv3 centre = m_pApp->GetGlobeCameraController().GetEcefInterestPoint();
+    m_pCameraTransitioner->StartTransitionTo(centre, altitude, true);
 }
 
 - (void)setVisibleCoordinateBounds:(EGCoordinateBounds)bounds animated:(BOOL)animated
@@ -303,7 +356,6 @@
         tentativeAltitudeMetres = static_cast<float>(fmax(minimumAltitude, (boundingRadius / tanf(tentativeFovRad/2.f))));
         
         Eegeo::Camera::GlobeCamera::GlobeCameraControllerConfiguration camConfig = Eegeo::Camera::GlobeCamera::GlobeCameraControllerConfiguration::CreateDefault(false);
-        
         if(tentativeAltitudeMetres >= camConfig.globeModeBeginFOVChangeAltitude)
         {
             float fovZoomParam = Eegeo::Math::Clamp01((tentativeAltitudeMetres - camConfig.globeModeBeginFOVChangeAltitude) / (camConfig.globeModeEndFOVChangeAltitude - camConfig.globeModeBeginFOVChangeAltitude));
@@ -317,6 +369,64 @@
     }
     
     return tentativeAltitudeMetres;
+}
+
+- (CLLocationCoordinate2D)getCameraLatLong
+{
+    Eegeo::dv3 camera = m_pApp->GetGlobeCameraController().GetEcefInterestPoint();
+    Eegeo::Space::LatLong latlong = Eegeo::Space::LatLong::FromECEF( camera );
+    return CLLocationCoordinate2DMake(latlong.GetLatitudeInDegrees(), latlong.GetLongitudeInDegrees());
+}
+
+- (void)disableTraffic:(BOOL)disable
+{
+    m_pWorld->GetTrafficModule().SetEnabled( disable );
+}
+
+- (void)createRoute:(NSArray*)plotPoints Altitude:(float)altitudeMeters Red:(float)red Green:(float)green Blue:(float)blue Alpha:(float)alpha
+{
+    const float halfWidth = 5.f;
+    const float routeSpeedMetersPerSecond = 40.f;
+    
+    //The color format is (Red, Green, Blue, Transparency - 0.0 is fully transparent and 1.0 is fully opaque).
+    Eegeo::v4 routeColour(red, green, blue, alpha);
+    
+    //The route builder helper object provides a fluent interface to make building a route simpler.
+    Eegeo::Routes::RouteBuilder builder;
+    
+    //We want the set of route vertices, and we get it by starting with an initial color and width and
+    //adding points. This route starts near the Transamerica Pyramid.
+    //
+    //We can add points by (latDegrees, longDegrees, altitudeMeters) tuples or by a LatLongAltitide object..
+    //
+    //The color can be changed arbitrarily along the route.
+    //
+    builder.Start(routeColour, halfWidth, routeSpeedMetersPerSecond, Eegeo::Routes::Road);
+
+    for ( int i = 0; i < plotPoints.count; i++ )
+    {
+        NSDictionary* dict = plotPoints[i];
+        builder.AddPoint( [dict[@"latitude"] doubleValue], [dict[@"longitude"] doubleValue], altitudeMeters );
+    }
+    std::vector<Eegeo::Routes::RouteVertex> points = builder.FinishRoute();
+    
+    // A route thickness scaling policy should be provided; this informs the route how it should modify its thickness
+    // (for example, based on camera altitude, or to play a "pulse" animation). Two implementations are provided; the
+    // IdentityRouteThicknessPolicy and the LinearAltitudeScaleBasedRouteThicknessPolicy. For this example we use the
+    // identity policy which will not modify the thickness of the route. The style accepts a const reference, so it
+    // does not take ownership over the thickness policy.
+    Eegeo::Routes::Style::RouteStyle routeStyle( &m_routeThicknessPolicy, Eegeo::Routes::Style::RouteStyle::DebugStyleNone);
+    
+    //We can now create a route from this set of points.
+    //
+    //The route can be created using the CreateRoute method on the RouteService, which must
+    //be destroyed through the complementary DestroyRoute method on RouteService.
+    Eegeo::Routes::Route* route = m_pWorld->GetRoutesModule().GetRouteService().CreateRoute(points, routeStyle, false);
+}
+
+- (void)buildingHighlight:(BOOL)select latitude:(double)latitude longitude:(double)longitude
+{
+    
 }
 
 - (BOOL)Event_TouchRotate:(const AppInterface::RotateData&)data
@@ -376,15 +486,52 @@
 - (BOOL)Event_TouchTap:(const AppInterface::TapData&)data
 {
     Eegeo::v2 screenTapPoint = Eegeo::v2(data.point.GetX(), data.point.GetY());
-    m_pAnnotationController->HandleTap(screenTapPoint);
+    if ( !m_pAnnotationController->HandleTap(screenTapPoint) )
+    {
+        // ** Only check for building tap if delegate is implemented and not an annotation controller **
+        if ( [m_delegate respondsToSelector:@selector(buildingSelectedLatitude:longitude:)] )
+        {
+            // ** Tap pressed, lets see if building selection required **
+            const Eegeo::Camera::RenderCamera& renderCamera = m_pApp->GetGlobeCameraController().GetRenderCamera();
+            
+            float screenPixelX = data.point.GetX();
+            float screenPixelY = data.point.GetY();
+            
+            Eegeo::dv3 rayOrigin = renderCamera.GetEcefLocation();
+            Eegeo::dv3 rayDirection;
+            Eegeo::Camera::CameraHelpers::GetScreenPickRay(renderCamera, screenPixelX, screenPixelY, rayDirection);
+            
+            Eegeo::Space::LatLongAltitude lla( .0f, .0f, .0f );
+            if ( m_pBuildingSelection->PerformRayPick(rayOrigin, rayDirection, lla) )
+            {
+                m_rayCasterResult = m_pBuildingSelection->GetRayCasterResult();
+                
+                m_pApp->GetBuildingFootprintsModule().GetBuildingSelectionController().PerformOperation( m_rayCasterResult, Eegeo::BuildingFootprints::BuildingSelectionController::Select );
+                
+                // ** Let the delegate know **
+                dispatch_async( dispatch_get_main_queue(),^{
+                    
+                    [m_delegate buildingSelectedLatitude:lla.GetLatitudeInDegrees() longitude:lla.GetLongitudeInDegrees()];
+                    });
+            }
+        }
+    }
     
     bool eventConsumed = m_pCameraTransitioner->IsTransitioning();
     return eventConsumed;
 }
 
+- (void)switchBuildingHighlightOff
+{
+    m_pApp->GetBuildingFootprintsModule().GetBuildingSelectionController().PerformOperation( m_rayCasterResult, Eegeo::BuildingFootprints::BuildingSelectionController::Deselect );
+}
+
 - (BOOL)Event_TouchDoubleTap:(const AppInterface::TapData&)data
 {
     bool eventConsumed = m_pCameraTransitioner->IsTransitioning();
+    if ( [m_delegate respondsToSelector:@selector(doubleTap:)] )
+        [m_delegate doubleTap:data];
+    
     return eventConsumed;
 }
 
@@ -407,3 +554,22 @@
 }
 
 @end
+
+namespace Eegeo
+{
+    namespace Selection
+    {
+        BOOL Building::PerformRayPick(dv3& rayOrigin, const dv3& rayDirection, Space::LatLongAltitude& intersectionPointLLA)
+        {
+            const Collision::RayCasterResult& pickResult = m_pRayCaster->CastRay(rayOrigin, rayDirection, Collision::CollisionGroup::Buildings);
+            if (pickResult.intersects)
+            {
+                m_pickResult = pickResult;
+                intersectionPointLLA = Space::LatLongAltitude::FromECEF( pickResult.intersectionPointEcef );
+                return YES;
+            }
+            
+            return NO;
+        }
+    }
+}

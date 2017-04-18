@@ -321,7 +321,7 @@ bool AppInputDelegate::HasApi() const
 
 void AppInputDelegate::BindApi(EegeoMapApiImplementation& api)
 {
-    Eegeo_ASSERT(!HasApi());
+    //    Eegeo_ASSERT(!HasApi());
     m_pBoundApi = &api;
 }
 

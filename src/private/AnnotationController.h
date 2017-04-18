@@ -78,7 +78,7 @@ namespace Eegeo
             
             void UpdateScreenProperties(const Eegeo::Rendering::ScreenProperties& screenProperties);
             
-            void HandleTap(const Eegeo::v2& screenPoint);
+            BOOL HandleTap(const Eegeo::v2& screenPoint);
         };
     }
 }

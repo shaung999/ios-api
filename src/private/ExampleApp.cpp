@@ -47,15 +47,16 @@ namespace
 }
 
 
-
-
-ExampleApp::ExampleApp(Eegeo::EegeoWorld* pWorld,
-                       const Eegeo::Rendering::ScreenProperties& screenProperties)
+ExampleApp::ExampleApp(Eegeo::EegeoWorld* pWorld, Eegeo::Space::LatLong currentLatLng,
+                       const Eegeo::Rendering::ScreenProperties& screenProperties,
+                       Eegeo::Modules::CollisionVisualizationModule& collisionVisualizationModule,
+                       Eegeo::Modules::BuildingFootprintsModule& buildingFootprintsModule)
 	: m_pCameraControllerFactory(NULL)
 	, m_pCameraTouchController(NULL)
 	, m_pWorld(pWorld)
     , m_pLoadingScreen(NULL)
     , m_screenPropertiesProvider(screenProperties)
+    , m_buildingFootprintsModule(buildingFootprintsModule)
 {
 	Eegeo::EegeoWorld& eegeoWorld = *pWorld;
 
@@ -67,15 +68,16 @@ ExampleApp::ExampleApp(Eegeo::EegeoWorld* pWorld,
 	const bool useLowSpecSettings = false;
 	Eegeo::Camera::GlobeCamera::GlobeCameraControllerConfiguration globeCameraControllerConfig = Eegeo::Camera::GlobeCamera::GlobeCameraControllerConfiguration::CreateDefault(useLowSpecSettings);
 
+    globeCameraControllerConfig.zoomAltitudeLow = 1500.0;
     Eegeo::Modules::Map::MapModule& mapModule = eegeoWorld.GetMapModule();
     Eegeo::Modules::Map::Layers::TerrainModelModule& terrainModelModule = eegeoWorld.GetTerrainModelModule();
     
     const bool twoFingerPanTiltEnabled = true;
     const float interestPointLatitudeDegrees = 37.793436f;
     const float interestPointLongitudeDegrees = -122.398654f;
-    const float interestPointAltitudeMeters = 2.7f;
+    const float interestPointAltitudeMeters = 1000.0f;
     const float cameraControllerOrientationDegrees = 0.0f;
-    const float cameraControllerDistanceFromInterestPointMeters = 1781.0f;
+    const float cameraControllerDistanceFromInterestPointMeters = 1500.0;
     
     m_pCameraControllerFactory = new Examples::DefaultCameraControllerFactory(
                                                                     terrainModelModule,
@@ -84,12 +86,12 @@ ExampleApp::ExampleApp(Eegeo::EegeoWorld* pWorld,
                                                                     m_screenPropertiesProvider,
                                                                     globeCameraControllerConfig,
                                                                     twoFingerPanTiltEnabled,
-                                                                    interestPointLatitudeDegrees,
-                                                                    interestPointLongitudeDegrees,
+                                                                    currentLatLng.GetLatitudeInDegrees(),
+                                                                    currentLatLng.GetLongitudeInDegrees(),
                                                                     interestPointAltitudeMeters,
                                                                     cameraControllerOrientationDegrees,
                                                                     cameraControllerDistanceFromInterestPointMeters);
-    
+
     m_pLoadingScreen = CreateLoadingScreen(screenProperties, eegeoWorld.GetRenderingModule(), eegeoWorld.GetPlatformAbstractionModule());
     
     m_pCameraController = m_pCameraControllerFactory->Create();
@@ -144,7 +146,9 @@ void ExampleApp::Draw (float dt)
     Eegeo::EegeoWorld& eegeoWorld = World();
     
     Eegeo::Camera::CameraState cameraState(m_pCameraController->GetCameraState());
-    
+
+    m_buildingFootprintsModule.Draw(m_pCameraController->GetRenderCamera());
+
     Eegeo::EegeoDrawParameters drawParameters(cameraState.LocationEcef(),
                                               cameraState.InterestPointEcef(),
                                               cameraState.ViewMatrix(),

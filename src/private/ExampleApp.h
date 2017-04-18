@@ -8,6 +8,7 @@
 #include "DefaultCameraControllerFactory.h"
 #include "AppInterface.h"
 #include "GlobeCameraController.h"
+#include "BuildingFootprintsModule.h"
 
 class ExampleApp : private Eegeo::NonCopyable
 {
@@ -18,7 +19,7 @@ private:
 	Eegeo::EegeoWorld* m_pWorld;
     Eegeo::Rendering::LoadingScreen* m_pLoadingScreen;
     Examples::ScreenPropertiesProvider m_screenPropertiesProvider;
-    
+    Eegeo::Modules::BuildingFootprintsModule& m_buildingFootprintsModule;
 
 	Eegeo::EegeoWorld& World()
 	{
@@ -28,8 +29,10 @@ private:
     void UpdateLoadingScreen(float dt);
 
 public:
-	ExampleApp(Eegeo::EegeoWorld* pWorld,
-               const Eegeo::Rendering::ScreenProperties& screenProperties);
+    ExampleApp(Eegeo::EegeoWorld* pWorld, Eegeo::Space::LatLong currentLatLng,
+               const Eegeo::Rendering::ScreenProperties& screenProperties,
+               Eegeo::Modules::CollisionVisualizationModule& collisionVisualizationModule,
+            Eegeo::Modules::BuildingFootprintsModule& buildingFootprintsModule);
 
 	~ExampleApp();
 
@@ -55,6 +58,8 @@ public:
 	{
 		return *m_pCameraTouchController;
 	}
+    
+    Eegeo::Modules::BuildingFootprintsModule& GetBuildingFootprintsModule() { return m_buildingFootprintsModule; }
     
     const Examples::IScreenPropertiesProvider& GetScreenPropertiesProvider() const { return m_screenPropertiesProvider; }
 

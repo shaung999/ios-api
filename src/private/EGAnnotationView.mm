@@ -80,7 +80,7 @@
     
     [self setAnnotationViewLabelsFromAnnotation];
     
-    self.calloutOffset = CGPointMake(0.f, -32.f);
+    self.calloutOffset = CGPointMake(0.f, 0.f); //-32.f);
 }
 
 - (void)dealloc
@@ -212,6 +212,9 @@
 {
     [m_pSelectionCalloutView setTitle: [self.annotation title]];
     [m_pSelectionCalloutView setSubtitle: [self.annotation subtitle]];
+    [m_pSelectionCalloutView setEst: [self.annotation est]];
+    [m_pSelectionCalloutView setGrowth: [self.annotation growth]];
+    [m_pSelectionCalloutView setProfit: [self.annotation profit]];
 }
 
 - (void)handleAnnotationTextChanged
@@ -270,6 +273,17 @@
             [self handleAnnotationTextChanged];
         }
     }
+}
+
+- (BOOL)handleTapX:(float)X Y:(float)Y
+{
+    [self setTapX:X];
+    [self setTapY:Y];
+    
+    if ( [_annotation respondsToSelector:@selector(calloutTapped)] )
+        return [_annotation calloutTapped];
+    
+    return true;
 }
 
 @end

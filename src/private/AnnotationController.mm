@@ -32,15 +32,16 @@ namespace Eegeo
         , m_pDelegate(pDelegate)
         , m_nextPinId(0)
         {
-            NSString* fullTextureName = Eegeo::Api::ImageHelpers::GetImageNameForDevice(@"pins_example/PinIconTexturePage", @".png");
+            //NSString* fullTextureName = Eegeo::Api::ImageHelpers::GetImageNameForDevice(@"pins_example/PinIconTexturePage", @".png");
+            NSString* fullTextureName = Eegeo::Api::ImageHelpers::GetImageNameForDevice(@"sc-pins/pin_comp-2", @".png");
             textureFileLoader.LoadTexture(m_pinIconsTexture, [fullTextureName UTF8String], true);
             Eegeo_ASSERT(m_pinIconsTexture.textureId != 0);
             
             int numberOfTilesAlongEachAxisOfTexturePage = 4;
             m_pPinIconsTexturePageLayout = Eegeo_NEW(Eegeo::Rendering::RegularTexturePageLayout)(numberOfTilesAlongEachAxisOfTexturePage);
             
-            int spriteWidthInMetres = 32;
-            int spriteHeightInMetres = 32;
+            int spriteWidthInMetres = 64;
+            int spriteHeightInMetres = 64;
             
             m_pPinsModule = Eegeo::Pins::PinsModule::Create(
                                                             renderingModule,
@@ -304,7 +305,7 @@ namespace Eegeo
             }
         }
         
-        void AnnotationController::HandleTap(const Eegeo::v2& screenPoint)
+        BOOL AnnotationController::HandleTap(const Eegeo::v2& screenPoint)
         {
             Eegeo::Pins::PinController& pinController = m_pPinsModule->GetController();
             std::vector<Eegeo::Pins::Pin*> intersectingPinsClosestToCameraFirst;
@@ -316,7 +317,7 @@ namespace Eegeo
                     Eegeo::Pins::Pin& pin = *intersectingPinsClosestToCameraFirst.front();
                     id<EGAnnotation> annotationData = static_cast<id<EGAnnotation> >(pin.GetUserData());
                     SelectAnnotation(annotationData, true);
-                    return;
+                    return TRUE;
                 }
             }
             
@@ -334,7 +335,7 @@ namespace Eegeo
                 if(AnnotationViewContainsPoint(pView, scaledScreenPos))
                 {
                     SelectAnnotation(annotation, true);
-                    return;
+                    return TRUE;
                 }
             }
             
@@ -342,6 +343,8 @@ namespace Eegeo
             {
                 DeselectAnnotation(m_selectedAnnotation, YES);
             }
+            
+            return FALSE;
         }
         
         bool AnnotationController::AnnotationViewContainsPoint(UIView* pView, const Eegeo::v2& screenPoint)

@@ -4,6 +4,7 @@
 
 #import "EGMapApi.h"
 #import "EGAnnotationView.h"
+#import "AppInterface.h"
 
 /*!
  @protocol EGMapDelegate
@@ -15,6 +16,11 @@
 - (void)eegeoMapReady:(id<EGMapApi>)api;
 
 @optional
+
+- (void)switchBuildingHighlightOff;
+- (void)buildingSelectedLatitude:(CGFloat)latitude longitude:(CGFloat)longitude;
+- (void)altitudeChangedTo:(double)newAltitude distanceToInterest:(double)distanceToInterest;
+- (BOOL)doubleTap:(const AppInterface::TapData&)data;
 
 /*!
  @method precacheOperationCompleted

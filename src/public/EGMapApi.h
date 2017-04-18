@@ -151,4 +151,14 @@
  */
 - (void)setEnvironmentFlatten:(BOOL)flatten;
 
+- (CLLocationCoordinate2D)getCameraLatLong;
+
+- (void)createRoute:(NSArray*)plotPoints Altitude:(float)altitudeMeters Red:(float)red Green:(float)green Blue:(float)blue Alpha:(float)alpha;
+
+- (CGFloat)getCurrentAltitude;
+- (CGFloat)getCurrentDistanceToInterest;
+- (void)zoomToAltitude:(float)altitude;
+- (void)switchBuildingHighlightOff;
+- (void)disableTraffic:(BOOL)disable;
+
 @end

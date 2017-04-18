@@ -5,7 +5,6 @@
 #import <UIKit/UIKit.h>
 #import "EGAnnotation.h"
 
-
 /*!
  @class EGAnnotationView
  @brief Responsible for presenting annotations visually in the eeGeo 3D Map.
@@ -98,6 +97,9 @@
  */
 @property (strong, nonatomic) UIView *rightCalloutAccessoryView;
 
+@property (nonatomic) CGFloat tapX;
+@property (nonatomic) CGFloat tapY;
+
 /*!
  @method setSelected
  @brief Set selection state for the view.
@@ -106,5 +108,7 @@
  @return Returns nothing.
  */
 - (void)setSelected:(BOOL)selected animated:(BOOL)animated;
+
+- (BOOL)handleTapX:(float)X Y:(float)Y;
 
 @end

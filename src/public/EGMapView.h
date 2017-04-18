@@ -31,6 +31,8 @@
  */
 - (id)initWithFrame:(CGRect)frame :(BOOL)useCachedResources;
 
+- (void)StopMonitoringLocationAfterInitial:(BOOL)stop;
+
 /*!
  @property eegeoMapDelegate
  @brief Should be set by the application to get an instance of the EGMapApi. Also specifies optional methods to handle various map events.

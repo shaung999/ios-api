@@ -98,7 +98,7 @@ EAGLContext* g_pContext = NULL;
     id<UIGestureRecognizerDelegate> gestureRecognizer = self;
     
     std::string apiKey = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"eeGeoMapsApiKey"] UTF8String];
-   
+    
     if(m_useCachedResources)
     {
         if(g_pAppRunner == NULL)
@@ -129,6 +129,11 @@ EAGLContext* g_pContext = NULL;
                                                object: nil];
     
     m_previousTimestamp = CFAbsoluteTimeGetCurrent();
+}
+
+- (void)StopMonitoringLocationAfterInitial:(BOOL)stop
+{
+    m_pAppRunner->GetAppHost().StopMonitoringLocationAfterInitial( stop );
 }
 
 - (void) layoutSubviews

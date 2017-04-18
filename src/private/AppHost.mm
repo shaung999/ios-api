@@ -17,6 +17,44 @@
 #include "JpegLoader.h"
 #include "iOSPlatformAbstractionModule.h"
 #include "ScreenProperties.h"
+#include "BuildingFootprintsModule.h"
+#include "CollisionVisualizationModule.h"
+#include "Collision.h"
+
+namespace
+{
+    Eegeo::Modules::BuildingFootprintsModule* CreateBuildingFootprintsModule(Eegeo::EegeoWorld& world, const Eegeo::Modules::CollisionVisualizationModule& collisionVisualizationModule)
+    {
+        const Eegeo::BuildingFootprints::BuildingFootprintSelectionControllerConfig& buildingFootprintSelectionControllerConfig = Eegeo::Modules::BuildingFootprintsModule::MakeDefaultConfig();
+        
+        const Eegeo::Modules::IPlatformAbstractionModule& platformAbstractionModule = world.GetPlatformAbstractionModule();
+        const Eegeo::Modules::Core::RenderingModule& renderingModule = world.GetRenderingModule();
+        const Eegeo::Modules::Map::MapModule& mapModule = world.GetMapModule();
+        const Eegeo::Modules::Map::Layers::BuildingStreamingModule& buildingStreamingModule = mapModule.GetBuildingStreamingModule();
+        const Eegeo::Modules::Map::CoverageTreeModule& coverageTreeModule = mapModule.GetCoverageTreeModule();
+        
+        Eegeo::Modules::BuildingFootprintsModule* pBuildingFootprintsModule =
+        Eegeo::Modules::BuildingFootprintsModule::Create(platformAbstractionModule,
+                                                         renderingModule,
+                                                         collisionVisualizationModule,
+                                                         buildingStreamingModule,
+                                                         coverageTreeModule,
+                                                         buildingFootprintSelectionControllerConfig);
+        return pBuildingFootprintsModule;
+    }
+    
+    Eegeo::Modules::CollisionVisualizationModule* CreateCollisionVisualizationModule(Eegeo::EegeoWorld& world)
+    {
+        const Eegeo::CollisionVisualization::MaterialSelectionControllerConfig& materialSelectionControllerConfig = Eegeo::Modules::CollisionVisualizationModule::MakeDefaultConfig();
+        
+        
+        const Eegeo::Modules::Core::RenderingModule& renderingModule = world.GetRenderingModule();
+        const Eegeo::Modules::Map::MapModule& mapModule = world.GetMapModule();
+        
+        Eegeo::Modules::CollisionVisualizationModule* pCollisionVisualizationModule = Eegeo::Modules::CollisionVisualizationModule::Create(renderingModule, mapModule, materialSelectionControllerConfig);
+        return pCollisionVisualizationModule;
+    }
+}
 
 using namespace Eegeo::iOS;
 
@@ -61,6 +99,9 @@ AppHost::AppHost(const std::string& apiKey,
     config.MapLayersConfig.Interiors.UseLegacyLabels = false;
     config.MapLayersConfig.Interiors.LabelFontTextureFilename = defaultFont;
     
+    config.CityThemesConfig.StreamedManifestUrl = [[[NSUserDefaults standardUserDefaults] objectForKey:@"manifestUrl"] UTF8String];
+    config.CoverageTreeConfig.ManifestUrl = [[[NSUserDefaults standardUserDefaults] objectForKey:@"coverageUrl"] UTF8String];
+
 	m_pWorld = new Eegeo::EegeoWorld(apiKey,
                                      *m_piOSPlatformAbstractionModule,
                                      *m_pJpegLoader,
@@ -71,7 +112,15 @@ AppHost::AppHost(const std::string& apiKey,
                                      config,
                                      NULL);
     
-    m_pApp = new ExampleApp(m_pWorld, screenProperties);
+    printf( "Manif Url: %s\n", config.CityThemesConfig.StreamedManifestUrl.c_str() );
+    printf( "Embed Url: %s\n", config.CityThemesConfig.EmbeddedThemeManifestFile.c_str() );
+    
+    m_pCollisionVisualizationModule = CreateCollisionVisualizationModule(*m_pWorld);
+    m_pBuildingFootprintsModule = CreateBuildingFootprintsModule(*m_pWorld, *m_pCollisionVisualizationModule);
+    
+    Eegeo::Space::LatLong currentLatLng(51.5073509,-0.1277583);
+    m_piOSLocationService->GetLocation( currentLatLng );
+    m_pApp = new ExampleApp(m_pWorld, currentLatLng, screenProperties, *m_pCollisionVisualizationModule, *m_pBuildingFootprintsModule);
     
     m_pAppLocationDelegate = new AppLocationDelegate(*m_piOSLocationService);
     
@@ -100,7 +149,13 @@ AppHost::~AppHost()
     
     delete m_pJpegLoader;
     m_pJpegLoader = NULL;
-
+    
+    delete m_pBuildingFootprintsModule;
+    m_pBuildingFootprintsModule = NULL;
+    
+    delete m_pCollisionVisualizationModule;
+    m_pCollisionVisualizationModule = NULL;
+    
 	Eegeo::EffectHandler::Reset();
 	Eegeo::EffectHandler::Shutdown();
 }
@@ -159,6 +214,13 @@ void AppHost::Update(float dt)
     Eegeo::Modules::Map::MapModule& mapModule = m_pWorld->GetMapModule();
     if (!mapModule.IsRunning() && m_pAppLocationDelegate->HasReceivedPermissionResponse())
     {
+        Eegeo::Space::LatLong ll( 0.0f, 0.0f );
+        m_piOSLocationService->GetLocation( ll );
+        
+        Eegeo::Space::LatLongAltitude lla( ll.GetLatitude(), ll.GetLongitude(), 100.0f );
+        Eegeo::Space::EcefTangentBasis cameraInterestBasis;
+        Eegeo::Camera::CameraHelpers::EcefTangentBasisFromPointAndHeading(lla.ToECEF(), 0.0f, cameraInterestBasis);
+        m_pApp->GetGlobeCameraController().SetInterestBasis( cameraInterestBasis );
         mapModule.Start();
     }
 	m_pApp->Update(dt);

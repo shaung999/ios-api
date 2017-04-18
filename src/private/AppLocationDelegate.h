@@ -2,6 +2,7 @@
 
 #pragma once
 
+#import <UIKit/UIKit.h>
 #import <CoreLocation/CoreLocation.h>
 #import <CoreLocation/CLLocationManagerDelegate.h>
 #include "Types.h"

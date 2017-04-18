@@ -52,6 +52,8 @@ public:
     void BindApi(EegeoMapApiImplementation& api);
     void UnbindApi();
     
+    void StopMonitoringLocationAfterInitial( BOOL stop ) { m_stopMonitoringLocationAfterInitial = stop; }
+    
 private:
     
     Eegeo::Helpers::Jpeg::IJpegLoader* m_pJpegLoader;
@@ -59,6 +61,9 @@ private:
 	Eegeo::EegeoWorld* m_pWorld;
 	AppInputDelegate* m_pAppInputDelegate;
     AppLocationDelegate* m_pAppLocationDelegate;
+    
+    Eegeo::Modules::CollisionVisualizationModule* m_pCollisionVisualizationModule;
+    Eegeo::Modules::BuildingFootprintsModule* m_pBuildingFootprintsModule;
 
 	Eegeo::UI::NativeInput::iOS::iOSInputBoxFactory m_iOSInputBoxFactory;
 	Eegeo::UI::NativeInput::iOS::iOSKeyboardInputFactory m_iOSKeyboardInputFactory;
@@ -67,5 +72,7 @@ private:
     Eegeo::iOS::iOSPlatformAbstractionModule* m_piOSPlatformAbstractionModule;
 
 	ExampleApp* m_pApp;
+    
+    BOOL m_stopMonitoringLocationAfterInitial;
 };
 
